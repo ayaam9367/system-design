@@ -20,7 +20,7 @@
  - serving 16kb of data in 120ms
  - both
 
- Scalability would be the property which allows us to achieve the above with the addition of more resources without compromising performance. 
+ Scalability would be the property which allows us to achieve the above with the addition of more resources while maintaining acceptable performance and efficiency. 
  Another way to look at performance vs scalability
  - If your system is slow for a single user - you have a performance problem
  - If your system is fast for a single user but slow under the load of multiple users - you have a scalability problem
@@ -51,8 +51,8 @@
  - deployments won't be graceful
  - will have to use sticky sessions, i.e. dedicate a user to a particular server- This will cause servers to have uneven loads
 
-### Never use File-Based Caching
-What is file-based caching - store temporary data as files on a server's hard drive (or SSD). When an application needs the cached data, it reads it from these files.
+### Avoid using File-Based Caching
+What is file-based caching - store temporary data as files on a server's hard drive (or SSD). When an application needs the cached data, it reads it from these files. It is pretty fast, often faster than distributed cache. 
 
 Problems with File Based Caching : 
 
@@ -61,13 +61,16 @@ Problems with File Based Caching :
 3. It Complicates Server Management : When a server is terminated, it loses all the “warm” cache and its replacement starts “cold”. This results in degraded performance until cache builds up again.
 
 ### Few ways to cache data :
-Didn't Understand this. 
 
-1. Cached Database Queries : Issue is whenever the data changes, you need to cache the query again. And this becomes especially prevalent when queries become complex.
+1. Cached Query Results: The application stores the result of a database query in a cache so subsequent requests can avoid hitting the database. The main challenge is cache invalidation: when underlying data changes, the cached result may become stale and must be updated or invalidated. Common approaches to invalidate the cache : 
+ - Cache-aside: delete/invalidate the cache when data changes; next request rebuilds it.
+ - Write-through: update cache as part of the write path.
+ - TTL: let cached data expire after some period.
+ - Explicit refresh: proactively recompute certain cached results
 
 2. Cached Objects : In case of complex queries, just delete the complete object lol. 
 Some ideas of objects to cache:    
-- user sessions (never use the database!)
+- user sessions (never use the application server for this!)
 - fully rendered blog articles
 - activity streams
 - user<->friend relationships
@@ -76,7 +79,7 @@ Some ideas of objects to cache:
 
 Aynchronism :  pre-computing of overall general data can extremely improve websites and web apps and makes them very scalable and performant. The frontend of your website sends a job onto a job queue and immediately signals back to the user: your job is in work, please continue to the browse the page. The job queue is constantly checked by a bunch of workers for new jobs. If there is a new job then the worker does the job and after some minutes sends a signal that the job was done. The frontend, which constantly checks for new “job is done” - signals, sees that the job was done and informs the user about it. 
 
-Immutability as a default - Imaging you have a user profile cached on 10 different servers. Now any change in the profile detail will have to reflect 10 servers and any failed operation will result in inconsistent data. With an immutable approach, you would cache the brand new user object and any new requests will fetch this user data. The old ones can be safely ignored and hence discarded. This simplifies caching. 
+Immutability: Instead of modifying an existing object in place, create a new version of the object when data changes. Existing consumers can continue using the old immutable version, while new consumers use the new version. This reduces problems caused by concurrent modifications and makes data easier to reason about and cache. However, immutability does not by itself solve distributed cache consistency; you still need mechanisms such as invalidation, versioning, or a shared cache.
 
 Lazy compute - delaying a computation until the result is absolutely needed. For example lazy loading images. 
 
@@ -120,16 +123,19 @@ It depends you need to consider :
 
 
 ### Why horizontal scaling usually matters more for a large distributed system ? 
+Horizontal scaling lets you increase system capacity by adding more machines, rather than depending on the limits of one machine.
+
 1. Geographical sense - It doesn't make sense for your user to fetch data from US when he resides in SG. It would take more time and more network bandwidth. Better option (if it justifies your costs) would be operate a server in SG and serve data from there. 
-2. Load - It would be unfair of you to expect that one server can do all the compute of the world. Offload the compute to other servers and keep all of them performant. 
+2. Load Distribution - It would be unfair of you to expect that one server can do all the compute of the world. Offload the compute to other servers and keep all of them performant. 
 3. Fault tolerance - If one server dies, you can rest assured that other servers can take its place and handle the load until you resurrect another server. 
-4. Separation of concerns - Suppose you have a sale in US, you can scale up your servers and plan for the load for US specifically without worrying about other geo locations. 
+4. Separation of concerns - You can let components and services scale independently depending on their workload.
 
 What happens when you add a second server ? 
-1. Load on the first server reduces - using load balancer
-2. Data redundancy increases - now you have same data lieing on two server, hence you have to worry about data consistency across multiple servers 
-3. Fault tolerance increases. If one goes down you can rest-assured that the first one can handle the load for sometime
-4. You start storing user sessions in a centralized storage or else you will end up with sticky sessions
+1. Load on the first server reduces - using load balancer 
+2. Fault tolerance increases - if one server fails, the load balancer can route traffic to the remaining server(s), allowing the system to continue operating, assuming they have sufficient capacity.
+3. State becomes a concern - You start storing user sessions in a centralized storage or else you will end up with sticky sessions.
+4. Network overhead increases. 
+5. Bottleneck may move - be careful
 
 
 ## How to Scale ? 
@@ -142,4 +148,20 @@ What happens when you add a second server ?
 6. Use design patterns like - fanout, pipes, filters
 7. Increase observability - CPU usage, memory usage, network latency, response times, network throughput
 
+## Different Dimensions of scalability
+1. Load scalability - can you handle more requests per second (rps), concurrent users, etc. 
+2. Data Scalability - can your system handle 100 MB -> 1 GB -> 1TB -> 1PB smoothly
+3. Organizational scalability - Can your architecture accommodate more services, teams, deployments, etc.?
+4. Geographic scalability - Can you serve users across different geographic regions effectively?
+
 Scalability is a ongoing process, never stops. 
+
+What are potential bottlenecks besides the application server?
+ - Database — CPU, disk/IOPS, expensive queries, locks, connection limits
+ - Cache (e.g. Redis) — CPU, memory, network, hot keys, connection limits
+ - Network — bandwidth, latency, packet loss
+ - Load balancer — throughput/connections, configuration limits
+ - Storage / filesystem — disk I/O, capacity, latency
+ - External services/APIs — their latency, rate limits, availability
+ - Queues/message brokers — queue buildup, throughput limits
+ - Application-level resources — thread pools, connection pools, file descriptors, etc.
