@@ -28,6 +28,7 @@
  The core idea is Performance != Scalability, they are independent of each other. 
  No system is infinitely scalable, but we aim to push the knee of declining performance as far as possible
  ![Performance vs Scalability](../Images/perf-vs-scalability.png)
+ <img src="../Images/perf-vs-scalability.png" alt="Performance vs scalability" width="700">
 
  How do you increase the performance ? 
  1. Use caching
