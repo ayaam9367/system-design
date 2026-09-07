@@ -27,6 +27,7 @@
 
  The core idea is Performance != Scalability, they are independent of each other. 
  No system is infinitely scalable, but we aim to push the knee of declining performance as far as possible
+
  <img src="../Images/perf-vs-scalability.png" alt="Performance vs scalability" width="500">
 
  How do you increase the performance ? 
@@ -59,7 +60,9 @@ Problems with File Based Caching :
 2.  It Creates "Cache Islands” :  In a load-balanced environment, a user's first request might go to Server A, which then creates a cache file for them. Their next request might go to Server B, which has no idea the cache exists on Server A.
 3. It Complicates Server Management : When a server is terminated, it loses all the “warm” cache and its replacement starts “cold”. This results in degraded performance until cache builds up again.
 
-### Few ways to cache data : 
+### Few ways to cache data :
+Didn't Understand this. 
+
 1. Cached Database Queries : Issue is whenever the data changes, you need to cache the query again. And this becomes especially prevalent when queries become complex.
 
 2. Cached Objects : In case of complex queries, just delete the complete object lol. 
@@ -77,21 +80,66 @@ Immutability as a default - Imaging you have a user profile cached on 10 differe
 
 Lazy compute - delaying a computation until the result is absolutely needed. For example lazy loading images. 
 
+## How to make a system more scalable
+To understand this you have to understand what are the main culprits of an "unscalable" system : 
+1. Centralized components - like a single server handling all transactions. You can vertical scale the server but hardware has its own limitations
+2. High latency operations - a data processing pipeline taking too long. You can throw 50 servers at the problem, unless you reduce the response time of the particular pipeline, your response time will not reduce, thus degrading performance and not making the server scalable. 
+
+Now to the main question, how to make it more scalable
+1. Increase statelessness - don't let servers hold onto client specific data during requests (like user sessions)
+2. Loose coupling - use well-designed components that can operate independently, or with minimal dependencies on each other. This will allow you scale only the components in-need of scaling. 
+3. Event-driver architecture for non-blocking operations. However, this increases challenges like error handling, debugging, data consistency. 
+
 ## Horizontal Scaling vs Vertical Scaling
 Add more servers - horizontal scaling
-Increase the size of your original server - vertical scaling
+Increase the size of your original server (CPU, RAMs) - vertical scaling
+
+Vertical scaling when
+- You prioritize simplicity 
+- You prioritize consistency
+- You have money
+- low server maintanance
+
+Disadvantages of vertical scaling
+- Limited hardware capabilities. 
+- Cost can skyrocket quickly - diminishing returns. 
+- Low fault tolerance
+
+Horizontal scaling when
+- Increase fault tolerance
+- cheaper at scale
+
+Disadvantages of horizontal scaling
+- More complex - need to handle complexity, network partitioning.
 
 How do you decide on which one is appropriate for you ?
+It depends you need to consider : 
+1. Budget
+2. Workload - if it is predicatable, go for vertical 
+3. Performance sensitive business - horizontal scaling
 
 
 ### Why horizontal scaling usually matters more for a large distributed system ? 
 1. Geographical sense - It doesn't make sense for your user to fetch data from US when he resides in SG. It would take more time and more network bandwidth. Better option (if it justifies your costs) would be operate a server in SG and serve data from there. 
 2. Load - It would be unfair of you to expect that one server can do all the compute of the world. Offload the compute to other servers and keep all of them performant. 
-3. Redundancy - If one server dies, you can rest assured that other servers can take its place and handle the load until you resurrect another server. 
+3. Fault tolerance - If one server dies, you can rest assured that other servers can take its place and handle the load until you resurrect another server. 
 4. Separation of concerns - Suppose you have a sale in US, you can scale up your servers and plan for the load for US specifically without worrying about other geo locations. 
 
 What happens when you add a second server ? 
 1. Load on the first server reduces - using load balancer
 2. Data redundancy increases - now you have same data lieing on two server, hence you have to worry about data consistency across multiple servers 
-3. Server reliability increases. If one goes down you can rest-assured that the first one can handle the load for sometime
+3. Fault tolerance increases. If one goes down you can rest-assured that the first one can handle the load for sometime
 4. You start storing user sessions in a centralized storage or else you will end up with sticky sessions
+
+
+## How to Scale ? 
+### Implement key components and strategies
+1. Load Balancing
+2. Caching
+3. CDNs
+4. Sharding
+5. Avoid centralized components
+6. Use design patterns like - fanout, pipes, filters
+7. Increase observability - CPU usage, memory usage, network latency, response times, network throughput
+
+Scalability is a ongoing process, never stops. 
