@@ -13,7 +13,7 @@
  Can you demonstrate performance degradation with a tiny API?
  Can you explain all of this without notes?
 
- ## What do we mean by a performant system ?
+## What do we mean by a performant system ?
  Suppose we serve an article which is 16kb of data in 155 ms
  Increasing performance would mean
  - serving 20kb of data in 155ms
@@ -28,6 +28,9 @@
  The core idea is Performance != Scalability, they are independent of each other. 
  No system is infinitely scalable, but we aim to push the knee of declining performance as far as possible
 
+ ------------------ What are the metrics you need to watch for to determine if your system has appropriate performance or if there is any change in it ------------------
+
+
  <img src="../Images/perf-vs-scalability.png" alt="Performance vs scalability" width="500">
 
  How do you increase the performance ? 
@@ -41,10 +44,9 @@
  2. Add more RAMs (vertical scale)
  3. Write scalable code (DRY, Separation of concerns, etc)
 
- ## How to increase performance of your system
- 1. Use Caching
+## Caching
 
- ### Cache the user sessions by storing them in a centralized persistent cache
+### Cache the user sessions by storing them in a centralized persistent cache
  Why not on the application servers ? 
  - Seperation of concerns : appl. servers are best at processing requests, data storage (I/O ops) can be offloaded to someone which specializes in that field. Scaling also becomes easier
  - if appl. server goes offline user’s sessions will be lost. This would be mean cold-starting the server, out-putting degraded performance until the cache builds up. 
@@ -149,6 +151,7 @@ What happens when you add a second server ?
 7. Increase observability - CPU usage, memory usage, network latency, response times, network throughput
 
 ## Different Dimensions of scalability
+Please take of all of these dimensions when discussing about scalability. 
 1. Load scalability - can you handle more requests per second (rps), concurrent users, etc. 
 2. Data Scalability - can your system handle 100 MB -> 1 GB -> 1TB -> 1PB smoothly
 3. Organizational scalability - Can your architecture accommodate more services, teams, deployments, etc.?
