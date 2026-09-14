@@ -11,7 +11,7 @@
  What happens when you add a second server?
  What are potential bottlenecks besides the application server?
  Can you demonstrate performance degradation with a tiny API?
- Can you explain all of this without notes?
+ Can you explain all of this without notes? 
 
 ## What do we mean by a performant system ?
  Suppose we serve an article which is 16kb of data in 155 ms
