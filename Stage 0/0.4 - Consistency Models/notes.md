@@ -8,7 +8,7 @@ Things to learn here:
 Weak consistency
 Eventual consistency
 Strong consistency
-Linearizability
+Linearizability 
 Consistency vs replication
 Synchronous vs asynchronous replication
 Read-after-write consistency
