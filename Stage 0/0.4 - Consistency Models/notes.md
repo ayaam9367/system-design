@@ -142,3 +142,142 @@ The burden of providing the guarantees lies primarily with the session manager t
 
 read-set = set of WIDs for the Writes that are relevant to session Reads
 write-set = set of WIDs for those Writes performed in the session
+
+
+## Causal Consistency - Bolt-on Causal Consistency
+
+### Introduction
+A user updates data in one region, and the change propagates asynchronously to the others. This improves availability and reduces coordination, but replicas may temporarily disagree.
+
+There are three important concepts:
+- Availability: Can the system continue responding to requests?
+- Eventual consistency: Will replicas eventually converge if updates stop?
+- Causal consistency: Will users observe an event's causes before observing its effects?
+Eventual consistency alone does not guarantee the third property. That is the gap this paper addresses.
+
+Event A — Original post
+Sally posts: "My son is missing!"
+[*Sally learns he is safe and edits her post*]
+
+Event B — Correction
+"False alarm! He's safe."
+[*A friend reads the correction and responds*]
+
+Event C — Reply
+"What a relief!"
+
+Suppose another user sees the reply but not the correction. They might see the friend expressing relief while still believing the child is missing. That is a causal consistency violation: the user observed an effect without its causal dependency.
+
+### What does bolt-on means ? 
+The authors propose separating database responsibilities into two layers.
+
+1. Application / Client : Issues reads and writes
+
+2. Bolt-on shim layer : Tracks dependencies, maintains metadata, and controls which writes become visible
+
+3. Eventually consistent database : Handles storage, replication, durability, availability, and eventual convergence
+
+Think of the shim as a consistency-enforcing middleware layer.
+The underlying database doesn't need to understand the application's causal relationships. The shim maintains that information and mediates what clients can observe.
+
+### Problem of Overwritten Histories
+This is one of the paper's most important technical contributions.
+
+Consider two writes to the same key:
+- y1 is an earlier value.
+- y2 overwrites y1.
+Suppose another write, x1, depends on y1.
+
+The shim needs to know that x1 depends on y1 to preserve causality. But an eventually consistent database may expose only the latest value, y2. If the shim hasn't observed y1 before it gets overwritten, the information it needs may disappear.
+
+The authors call this the overwritten histories problem. 
+
+Why is this difficult?
+- Waiting indefinitely for y1 may make the system unavailable.
+- Ignoring the missing dependency may violate causal consistency.
+- Keeping every historical version forever can create substantial storage overhead.
+The paper develops a mechanism that addresses these competing requirements without requiring the underlying store to retain every write.
+
+### Solution
+The authors introduce a declarative concept called a causal cut.
+
+A causal cut is a set of writes that is safe to expose together: whenever an included write depends on an earlier write, the set contains an appropriate version of that dependency.
+Consider this : 
+Write A
+*Creates a record*
+
+Write B
+*Depends on A*
+
+Write C
+*Depends on B and indirectly on A*
+
+If the shim wants to expose C, it must ensure the causal dependencies are covered. It cannot simply expose C because the underlying database happens to return it.
+
+To do this, the shim:
+1. Attaches dependency metadata to writes.
+2. Keeps a local store containing a causally valid set of writes.
+3. Checks whether a write's dependencies are already covered.
+4. Fetches dependency information when needed.
+5. Makes writes visible only when the causal requirements are satisfied.
+
+The paper describes both an asynchronous approach and a more pessimistic approach that checks dependencies on the read path.
+
+### Approach A: Asynchronous dependency resolution
+- the standard bolt-on causal consistency design
+The key idea is: never make a read wait for dependency resolution.
+
+Suppose the local store contains A, but the database has A, B, and C.
+Client requests C *Read immediately*
+
+1. The shim returns the value currently in its local store.
+Local store: A
+C isn't applied yet, so the read may return an older value or no value.
+
+2. The shim adds the relevant key to a background-check queue.
+Background resolver:
+- Fetches the latest available write.
+- Checks its dependencies.
+- Fetches missing dependencies where possible.
+- Applies the writes in a causally valid order.
+
+3. A later read can observe the newly applied data.
+The background resolver maintains a set of keys called to_check. A read requests a check for its key, and the resolver polls the underlying database because the database doesn't necessarily notify the shim when new writes arrive.
+
+**What if a dependency is missing?**
+Suppose the resolver finds C, which depends on B, but B is not in the local store. It attempts to fetch B. If B depends on A, the resolver must also ensure that A is covered.
+The resolver builds a tentative set of writes and applies them only if that set, together with the local store, satisfies the causal-cut condition. This prevents it from exposing a partial dependency chain. 
+
+**Advantages and disadvantages**
+- Very fast reads: They can be served from local memory.
+- Good availability: Reads don't need to wait for the underlying database.
+- Potentially stale results: A recent write may exist in the database but not yet in the local store.
+- Poor first-read visibility: The paper notes that the first read of a key can return null if the resolver hasn't already been checking that key.
+
+### Approach B: Pessimistic dependency resolution
+The pessimistic approach moves the same dependency-resolution work into the read's critical path. Writes still follow the same basic process.
+
+Using the same example:
+Client requests C *Resolve before returning*
+
+1. Read C from the database : The shim fetches the latest available version of C.
+
+2. Check dependencies : C depends on B. Is B covered by the local store or the writes already being resolved?
+
+3. Fetch missing dependencies : If B is missing, read it from the database and recursively check its dependencies, such as A.
+
+4. Apply and return : If a valid causal cut can be formed, apply the writes and return C. Otherwise, the newly fetched writes aren't applied.
+
+**Advantages and disadvantages**
+- Better visibility: It tries to incorporate newer data before answering.
+- Higher read latency: Each missing dependency can trigger another database request.
+- Lower throughput: The read path now performs network and dependency-resolution work.
+- Long dependency chains hurt: A read can trigger multiple sequential fetches before it completes.
+
+### Practical Implementation
+The authors' single-node experiments on Cassandra found a significant performance difference between the two designs. 
+
+Asynchronous bolt-on : 16.3K–29.2K Peak operations per second across the evaluated datasets
+Pessimistic bolt-on : 8.8K–15.0K Peak operations per second across the evaluated datasets
+
+For the Metafilter workload, the pessimistic design performed an average of 1.32 underlying database reads per frontend read, while the asynchronous design performed none on the synchronous read path. Pessimistic resolution also produced 18% fewer null responses in that workload.
